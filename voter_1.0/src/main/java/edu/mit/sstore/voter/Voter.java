@@ -9,6 +9,7 @@ import java.io.Serializable;
 import java.net.ConnectException;
 import java.net.Socket;
 import java.util.Arrays;
+import java.util.List;
 
 import org.apache.spark.api.java.*;
 import org.apache.spark.SparkConf;
@@ -104,10 +105,19 @@ public class Voter  extends Receiver<String>
 		}
 
 		SparkConf conf = new SparkConf().setAppName("Voter Application").setMaster(master);
+		//JavaSparkContext sc = new JavaSparkContext(conf);
+
 		JavaStreamingContext jssc = new JavaStreamingContext(conf, new Duration(1000));
 //	    JavaDStream<String> votes = jssc.textFileStream(voteFile);
 		JavaReceiverInputDStream<String> votes = jssc.receiverStream(
 			      new Voter("localhost", 6789) );
+		
+		List<Tuple2<Long,Integer>> data = Arrays.asList();
+		
+		// [Question] ??? how to create empty JavaPairRDD for updating 
+		//final JavaPairRDD<Long, Integer> phoneCallHistoryData = new JavaPairRDD(null, null, null);
+		
+		
 //		System.out.println("hawk test 2 ...");
 	    
 		//votes.cache();
@@ -126,15 +136,41 @@ public class Voter  extends Receiver<String>
 	    
 	    JavaDStream<PhoneCall> validatedPhoneCalls = phoneCalls.filter(new Function<PhoneCall, Boolean>() {
 		      public Boolean call(PhoneCall call) { 
-//		    	  if(call.contestantNumber>6)
-//		    		  return false;
-//		    	  else
+		    	  if(call.contestantNumber>6)
+		    		  return false;
+		    	  else
+		    	  {
+//		    		  // determine if the call number has been used more than threshold
+//		    		  // step 1 - get the current times
+//		    		  List<Integer> numbers = phoneCallHistoryData.lookup(call.phoneNumber);
+//		    		  
+//		    		  // step 2 - if not exist, return true
+//		    		  if(numbers==null)
+//		    			  return true;
+//		    		  else
+//		    		  // else if less then threshold, return true
+//		    		  {
+//		    			  Integer number = numbers.get(0);
+//		    			  if(number>2)
+//		    				  return false;
+//		    			  else
+//		    			  {
+//		    				  //update the phoneCallHistoryData, but how ??? [Question]
+//		    				  return true;
+//		    			  }
+//		    		  }
+		    		  
 		    		  return true;
+
+		    	  }
 		      }
 		    });
 	    
 	    //System.out.println("valid votes number");
-	    //validatedPhoneCalls.count().print();
+	    validatedPhoneCalls.count().print();
+	    
+	    // [Question] How to make aggregation from streaming begin till current batch, 
+	    // not just make aggregation based on current batch or window
 
 //	    JavaDStream<String> phonenums = votes.filter(new Function<String, Boolean>() {
 //	    		      public Boolean call(String s) { 
