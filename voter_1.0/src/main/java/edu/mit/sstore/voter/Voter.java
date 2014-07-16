@@ -20,8 +20,6 @@ import org.apache.spark.streaming.receiver.Receiver;
 
 import scala.Tuple2;
 
-
-
 public class Voter  extends Receiver<String>
 {
 
@@ -190,8 +188,6 @@ public class Voter  extends Receiver<String>
 	    jssc.start();              // Start the computation
 	    jssc.awaitTermination();   // Wait for the computation to terminate
 	    
-//	    jssc.stop();
-
 	}
 
 }
