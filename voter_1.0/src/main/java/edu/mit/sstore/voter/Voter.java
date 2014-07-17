@@ -21,7 +21,6 @@ import org.apache.spark.streaming.receiver.Receiver;
 
 import com.google.common.base.Optional;
 
-
 import scala.Option;
 import scala.Tuple2;
 
@@ -110,8 +109,8 @@ public class Voter  extends Receiver<String>
 		
 		SparkConf conf = new SparkConf()
 				.setAppName("Voter Application")
-				.setMaster(master)
-				.set("spark.cleaner.ttl", "100");
+				.setMaster(master);
+				//.set("spark.cleaner.ttl", "100");
 				//.set("spark.streaming.unpersist", "true");
 		
 		//JavaSparkContext sc = new JavaSparkContext(conf);
@@ -151,7 +150,6 @@ public class Voter  extends Receiver<String>
 	        }
 	      });
 	    
-	    //phoneCalls.cache();
 	    Function2<List<Integer>, Optional<Integer>, Optional<Integer>> updateFunction =
 	    		  new Function2<List<Integer>, Optional<Integer>, Optional<Integer>>() {
 	    		    public Optional<Integer> call(List<Integer> values, Optional<Integer> state) {
@@ -168,6 +166,48 @@ public class Voter  extends Receiver<String>
 	    		  
 	    JavaPairDStream<Integer, Integer> runningContestantCounts = contestants.updateStateByKey(updateFunction);
 	    runningContestantCounts.print();
+
+	    JavaPairDStream<Long, Integer> calls = phoneCalls.mapToPair(
+	  	      new PairFunction<PhoneCall, Long, Integer>() {
+	  	        public Tuple2<Long, Integer> call(PhoneCall x) {
+	  	        	return new Tuple2<Long, Integer>(x.phoneNumber, 1);
+	  	        }
+	  	      });
+
+	    JavaPairDStream<Long, Integer> callNumberCounts = calls.updateStateByKey(updateFunction);
+	    callNumberCounts.print();
+	    
+	    PairFunction<Tuple2<Long, Integer>, Integer,Long> swapFunction = new PairFunction<Tuple2<Long, Integer>, Integer, Long>() 
+	    {
+			public Tuple2<Integer, Long> call(Tuple2<Long, Integer> in) {
+				return in.swap();
+			}
+		};
+	    
+		JavaPairDStream<Integer, Long> swappedCallNumberCounts = callNumberCounts.mapToPair(swapFunction);
+		swappedCallNumberCounts.print();
+
+		JavaPairDStream<Integer, Long> sortedCallNumberCounts = swappedCallNumberCounts.transformToPair(
+				new Function<JavaPairRDD<Integer, Long>, JavaPairRDD<Integer, Long>>() 
+				{
+
+					public JavaPairRDD<Integer, Long> call(JavaPairRDD<Integer, Long> in) throws Exception 
+					{
+						return in.sortByKey(false);
+					}
+
+				});
+		
+		sortedCallNumberCounts.foreach(new Function<JavaPairRDD<Integer, Long>, Void>() {
+					public Void call(JavaPairRDD<Integer, Long> rdd) {
+						String out = "\nTop 10 :\n";
+						for (Tuple2<Integer, Long> t : rdd.take(10)) {
+							out = out + t.toString() + "\n";
+						}
+						System.out.println(out);
+						return null;
+					}
+				});
 	    
 	    JavaDStream<PhoneCall> validatedPhoneCalls = phoneCalls.filter(new Function<PhoneCall, Boolean>() {
 		      public Boolean call(PhoneCall call) { 
