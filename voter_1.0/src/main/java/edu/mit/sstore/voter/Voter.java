@@ -19,6 +19,10 @@ import org.apache.spark.streaming.*;
 import org.apache.spark.streaming.api.java.*;
 import org.apache.spark.streaming.receiver.Receiver;
 
+import com.google.common.base.Optional;
+
+
+import scala.Option;
 import scala.Tuple2;
 
 public class Voter  extends Receiver<String>
@@ -103,11 +107,19 @@ public class Voter  extends Receiver<String>
 		if (master == null) {
 			master = "local[2]";
 		}
-
-		SparkConf conf = new SparkConf().setAppName("Voter Application").setMaster(master);
+		
+		SparkConf conf = new SparkConf()
+				.setAppName("Voter Application")
+				.setMaster(master)
+				.set("spark.cleaner.ttl", "100");
+				//.set("spark.streaming.unpersist", "true");
+		
 		//JavaSparkContext sc = new JavaSparkContext(conf);
 
-		JavaStreamingContext jssc = new JavaStreamingContext(conf, new Duration(1000));
+		JavaStreamingContext jssc = new JavaStreamingContext(conf, new Duration(Integer.valueOf(args[0])));
+		
+		jssc.checkpoint(".");
+		
 //	    JavaDStream<String> votes = jssc.textFileStream(voteFile);
 		JavaReceiverInputDStream<String> votes = jssc.receiverStream(
 			      new Voter("localhost", 6789) );
@@ -130,9 +142,32 @@ public class Voter  extends Receiver<String>
 		    });
 	    
 	    //System.out.println("original votes number");
-	    phoneCalls.count().print();
+	    //phoneCalls.count().print();
 
+	    JavaPairDStream<Integer, Integer> contestants = phoneCalls.mapToPair(
+	      new PairFunction<PhoneCall, Integer, Integer>() {
+	        public Tuple2<Integer, Integer> call(PhoneCall x) {
+	        	return new Tuple2<Integer, Integer>(x.contestantNumber, 1);
+	        }
+	      });
+	    
 	    //phoneCalls.cache();
+	    Function2<List<Integer>, Optional<Integer>, Optional<Integer>> updateFunction =
+	    		  new Function2<List<Integer>, Optional<Integer>, Optional<Integer>>() {
+	    		    public Optional<Integer> call(List<Integer> values, Optional<Integer> state) {
+	    		      // add the new values with the previous running count to get the new count
+	    		      Integer sum = 0;
+	    		      for(Integer i : values)
+	    		      {
+	    		    	  sum += i;
+	    		      }
+	    		      Integer newSum = sum + state.or(0);
+	    		      return Optional.of(newSum);
+	    		    }
+	    		  };
+	    		  
+	    JavaPairDStream<Integer, Integer> runningContestantCounts = contestants.updateStateByKey(updateFunction);
+	    runningContestantCounts.print();
 	    
 	    JavaDStream<PhoneCall> validatedPhoneCalls = phoneCalls.filter(new Function<PhoneCall, Boolean>() {
 		      public Boolean call(PhoneCall call) { 
@@ -167,7 +202,7 @@ public class Voter  extends Receiver<String>
 		    });
 	    
 	    //System.out.println("valid votes number");
-	    validatedPhoneCalls.count().print();
+	    //validatedPhoneCalls.count().print();
 	    
 	    // [Question] How to make aggregation from streaming begin till current batch, 
 	    // not just make aggregation based on current batch or window

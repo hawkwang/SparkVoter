@@ -20,7 +20,8 @@ class TCPServer
          {
             Socket connectionSocket = welcomeSocket.accept();
             DataOutputStream outToClient = new DataOutputStream(connectionSocket.getOutputStream());
-            svr.rateControlledRunLoop(outToClient);
+            svr.sendOneVateEachDuration(outToClient);
+            //svr.rateControlledRunLoop(outToClient);
 
             //String voteinfo;
             //for(long i=0; i< 400000l; i++)
@@ -61,6 +62,25 @@ class TCPServer
         }        
 
         this.sendrate = sendrate;
+    }
+
+
+    public void sendOneVateEachDuration(DataOutputStream outToClient) throws Exception
+    {
+        int duration = this.sendrate;
+        this.reset();
+
+        while(true)
+        {
+            if(this.hasMoreVotes()==true)
+            {
+                String tuple = this.nextVoteString() + "\n";
+                outToClient.writeBytes(tuple);
+                Thread.sleep(duration);
+            }
+            else
+                break;
+        }
     }
 
     public void rateControlledRunLoop(DataOutputStream outToClient) throws Exception
