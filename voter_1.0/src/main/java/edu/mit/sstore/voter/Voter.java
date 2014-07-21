@@ -18,6 +18,8 @@ import org.apache.spark.storage.StorageLevel;
 import org.apache.spark.streaming.*;
 import org.apache.spark.streaming.api.java.*;
 import org.apache.spark.streaming.receiver.Receiver;
+import org.apache.log4j.Logger;
+import org.apache.log4j.Level;
 
 import com.google.common.base.Optional;
 
@@ -31,6 +33,9 @@ public class Voter extends Receiver<String> {
 
 	String host = null;
 	int port = -1;
+	
+	public static final int MAX_VOTES = 2;//1000; 
+	public static final int NUM_CONTESTANTS = 6; 
 
 	public Voter(String host_, int port_) {
 		super(StorageLevel.MEMORY_AND_DISK_2());
@@ -101,8 +106,7 @@ public class Voter extends Receiver<String> {
 	static public Integer count = 0;
 
 	public static void main(String[] args) {
-		// System.out.println("hawk test 1 ...");
-		// String voteFile = "votes-o-40000.txt";
+
 		String master = System.getenv("MASTER");
 		if (master == null) {
 			master = "local[2]";
@@ -110,42 +114,27 @@ public class Voter extends Receiver<String> {
 
 		SparkConf conf = new SparkConf().setAppName("Voter Application")
 				.setMaster(master);
-		// .set("spark.cleaner.ttl", "100");
-		// .set("spark.streaming.unpersist", "true");
-
-		// JavaSparkContext sc = new JavaSparkContext(conf);
-
+		
+	    Logger.getLogger("org").setLevel(Level.WARN);
+	    Logger.getLogger("akka").setLevel(Level.WARN);
+	    
 		JavaStreamingContext jssc = new JavaStreamingContext(conf,
 				new Duration(Integer.valueOf(args[0])));
 
 		jssc.checkpoint(".");
 
-		// JavaDStream<String> votes = jssc.textFileStream(voteFile);
 		JavaReceiverInputDStream<String> votes = jssc.receiverStream(new Voter(
 				"localhost", 6789));
 
-		List<Tuple2<Long, Integer>> data = Arrays.asList();
-
-		// [Question] ??? how to create empty JavaPairRDD for updating
-		// final JavaPairRDD<Long, Integer> phoneCallHistoryData = new
-		// JavaPairRDD(null, null, null);
-
-		// System.out.println("hawk test 2 ...");
-
-		// votes.cache();
-
+		// transform text line stream to PhoneCall stream
 		JavaDStream<PhoneCall> phoneCalls = votes
 				.map(new Function<String, PhoneCall>() {
 					public PhoneCall call(String s) {
-						// System.out.println("original votes - " + s);
 						return getPhoneCall(s);
 					}
 				});
 
-
-		// System.out.println("original votes number");
-		// phoneCalls.count().print();
-
+		// create updateFunction which is used to update the total call count for each phone number 
 		Function2<List<Integer>, Optional<Integer>, Optional<Integer>> updateFunction = new Function2<List<Integer>, Optional<Integer>, Optional<Integer>>() {
 			public Optional<Integer> call(List<Integer> values,
 					Optional<Integer> state) {
@@ -160,6 +149,7 @@ public class Voter extends Receiver<String> {
 			}
 		};
 
+		// 
 		JavaPairDStream<Long, Integer> calls = phoneCalls
 				.mapToPair(new PairFunction<PhoneCall, Long, Integer>() {
 					public Tuple2<Long, Integer> call(PhoneCall x) {
@@ -177,7 +167,7 @@ public class Voter extends Receiver<String> {
 		JavaPairDStream<Long, Integer> allowedCalls = callNumberCounts.filter(new Function<Tuple2<Long, Integer>,Boolean>(){
 
 			public Boolean call(Tuple2<Long, Integer> v1) throws Exception {
-				if (v1._2() > 2)
+				if (v1._2() > Voter.MAX_VOTES)
 					return false;
 				
 				return true;
@@ -186,53 +176,11 @@ public class Voter extends Receiver<String> {
 		
 		//allowedCalls.print();
 		
-		// how to get the count for the specified phone number?
-		// Integer count = callNumberCounts.
-
-		// PairFunction<Tuple2<Long, Integer>, Integer,Long> swapFunction = new
-		// PairFunction<Tuple2<Long, Integer>, Integer, Long>()
-		// {
-		// public Tuple2<Integer, Long> call(Tuple2<Long, Integer> in) {
-		// return in.swap();
-		// }
-		// };
-		//
-		// JavaPairDStream<Integer, Long> swappedCallNumberCounts =
-		// callNumberCounts.mapToPair(swapFunction);
-		// swappedCallNumberCounts.print();
-		//
-		// JavaPairDStream<Integer, Long> sortedCallNumberCounts =
-		// swappedCallNumberCounts.transformToPair(
-		// new Function<JavaPairRDD<Integer, Long>, JavaPairRDD<Integer,
-		// Long>>()
-		// {
-		//
-		// public JavaPairRDD<Integer, Long> call(JavaPairRDD<Integer, Long> in)
-		// throws Exception
-		// {
-		// return in.sortByKey(false);
-		// }
-		//
-		// });
-		//
-		// sortedCallNumberCounts.foreach(new Function<JavaPairRDD<Integer,
-		// Long>, Void>() {
-		// public Void call(JavaPairRDD<Integer, Long> rdd) {
-		// String out = "\nTop 10 :\n";
-		// for (Tuple2<Integer, Long> t : rdd.take(10)) {
-		// out = out + t.toString() + "\n";
-		// }
-		// System.out.println(out);
-		// return null;
-		// }
-		// });
-		
-
 		// get validate contestant phone calls
 		JavaDStream<PhoneCall> validContestantPhoneCalls = phoneCalls
 				.filter(new Function<PhoneCall, Boolean>() {
 					public Boolean call(PhoneCall call) {
-						if(call.contestantNumber>6)
+						if ( call.contestantNumber > Voter.NUM_CONTESTANTS )
 							return false;
 						return true;
 					}
@@ -245,51 +193,6 @@ public class Voter extends Receiver<String> {
 					}
 				});
 
-		// anotherTemporyPhoneCalls.print();
-
-		// test the join features
-//		final JavaRDD<String> statusInfoRDD = jssc.sparkContext().textFile(
-//				"status.txt");
-
-		// statusInfoRDD.foreach(new VoidFunction<String>(){
-		//
-		// public void call(String t) throws Exception {
-		// System.out.println(t);
-		// }
-		//
-		// } );
-
-//		final JavaPairRDD<Long, Integer> newStatusPairRDD = statusInfoRDD
-//				.mapToPair(new PairFunction<String, Long, Integer>() {
-//
-//					public Tuple2<Long, Integer> call(String item)
-//							throws Exception {
-//						return new Tuple2<Long, Integer>(Long.parseLong(item),
-//								1);
-//					}
-//
-//				});
-
-		// final JavaPairRDD<Long, Integer> statusPairRDD =
-		// statusInfoRDD.mapToPair(
-		// new PairFunction<String, Long, Integer>() {
-		// public Tuple2<Long, Integer> call(String x) {
-		// String[] fields = x.split(" ");
-		// // System.out.println("number - " + Long.parseLong(fields[0]));
-		// // System.out.println("total - " + Integer.parseInt(fields[1]));
-		// return new Tuple2<Long, Integer>(Long.parseLong(fields[0]),
-		// Integer.parseInt(fields[1]));
-		// }
-		// });
-
-//		VoidFunction<Tuple2<Long, Integer>> f1 = new VoidFunction<Tuple2<Long, Integer>>() {
-//			public void call(Tuple2<Long, Integer> t) throws Exception {
-//				System.out.println(t._1());
-//				System.out.println(t._2());
-//			}
-//		};
-
-		//newStatusPairRDD.foreach(f1);
 
 		// get validate phone call records
 		JavaPairDStream<Long, Tuple2<PhoneCall, Integer>> validatePhoneCalls = anotherTemporyPhoneCalls
@@ -316,150 +219,66 @@ public class Voter extends Receiver<String> {
 					}
 				});
 		
-		validateCalls.print();
+		//validateCalls.print();
+		
+		// use window to get generate leaderboard
+		//step 1, generate window
+		Integer size = Integer.valueOf(args[1]);
+		Integer slide = Integer.valueOf(args[2]);
+		
+		JavaDStream<PhoneCall> windowCalls = validateCalls.window(new Duration(size), new Duration(slide));
+		
+		//windowCalls.print();
+		
+		
+		JavaPairDStream<Integer, Integer> contestantNums = windowCalls
+				.mapToPair(new PairFunction<PhoneCall, Integer, Integer>() {
+					public Tuple2<Integer, Integer> call(PhoneCall x) {
+						return new Tuple2<Integer, Integer>(x.contestantNumber, 1);
+					}
+				});
 
-//		JavaPairDStream<Long, Tuple2<PhoneCall, Integer>> cleanedDStream = anotherTemporyPhoneCalls
-//				.transformToPair(new Function<JavaPairRDD<Long, PhoneCall>, JavaPairRDD<Long, Tuple2<PhoneCall, Integer>>>() {
-//					public JavaPairRDD<Long, Tuple2<PhoneCall, Integer>> call(
-//							JavaPairRDD<Long, PhoneCall> rdd) throws Exception {
-//						return rdd.join(newStatusPairRDD);
-//					}
-//
-//				});
+		JavaPairDStream<Integer, Integer> contestantCounts = contestantNums
+				.reduceByKey(new Function2<Integer, Integer, Integer>() {
+					public Integer call(Integer i1, Integer i2)
+							throws Exception {
 
-		//cleanedDStream.print();
+						return i1 + i2;
+					}
+				});
+		
+		contestantCounts.print();
+		
+		// generate the accumulated count for contestants
+		JavaPairDStream<Integer, Integer> totalWindowContestantCounts = contestantNums.updateStateByKey(updateFunction);
+		//totalWindowContestantCounts.print();
 
-//		JavaPairDStream<Long, Integer> another = temporyPhoneCalls
-//				.mapToPair(new PairFunction<PhoneCall, Long, Integer>() {
-//					public Tuple2<Long, Integer> call(PhoneCall x) {
-//						return new Tuple2<Long, Integer>(x.phoneNumber,
-//								x.contestantNumber);
-//					}
-//				});
+		
+		
+		// used for sorting
+		PairFunction<Tuple2<Integer, Integer>, Integer, Integer> swapFunction = new PairFunction<Tuple2<Integer, Integer>, Integer, Integer>() {
+			public Tuple2<Integer, Integer> call(Tuple2<Integer, Integer> in) {
+				return in.swap();
+			}
+		};
 
-//		JavaPairDStream<Long, Tuple2<Integer, Integer>> anotherCleanedDStream = another
-//				.transformToPair(new Function<JavaPairRDD<Long, Integer>, JavaPairRDD<Long, Tuple2<Integer, Integer>>>() {
-//					public JavaPairRDD<Long, Tuple2<Integer, Integer>> call(
-//							JavaPairRDD<Long, Integer> rdd) throws Exception {
-//						JavaPairRDD<Long, Tuple2<Integer, Integer>> result = rdd
-//								.join(newStatusPairRDD);
-//						return result;
-//					}
-//				});
-		// anotherCleanedDStream.print();
+		JavaPairDStream<Integer, Integer> swappedTotalWindowContestantCounts = totalWindowContestantCounts
+				.mapToPair(swapFunction);
+		//swappedTotalWindowContestantCounts.print();
 
-		// JavaDStream<PhoneCall> validatedPhoneCalls =
-		// temporyPhoneCalls.filter(new Function<PhoneCall, Boolean>() {
-		// public Boolean call(PhoneCall call) {
-		// if(call.contestantNumber>6)
-		// return false;
-		// else
-		// {
-		// // determine if the call number has been used more than threshold
-		// // step 1 - get the current times
-		// final Long phonenumber = call.phoneNumber;
-		// count = 0;
-		// callNumberCounts.foreach(
-		// new Function<JavaPairRDD<Long, Integer>, Void>()
-		// {
-		//
-		// public Void call(JavaPairRDD<Long, Integer> rdd) throws Exception {
-		// List<Integer> result = rdd.lookup(phonenumber);
-		// if(result.isEmpty()==false)
-		// count = result.get(0);
-		//
-		// return null;
-		// }
-		// }
-		// );
-		// // step 2 - if not exist, return true
-		// if(count==0)
-		// return true;
-		// else
-		// // else if less then threshold, return true
-		// {
-		// if(count>2)
-		// return false;
-		// else
-		// {
-		// return true;
-		// }
-		// }
-		//
-		// // return true;
-		// }
-		// }
-		// });
+		JavaPairDStream<Integer, Integer> sortedTotalWindowContestantCounts = swappedTotalWindowContestantCounts
+				.transformToPair(new Function<JavaPairRDD<Integer, Integer>, JavaPairRDD<Integer, Integer>>() {
 
-		// System.out.println("valid votes number");
-		// validatedPhoneCalls.count().print();
+					public JavaPairRDD<Integer, Integer> call(
+							JavaPairRDD<Integer, Integer> in) throws Exception {
+						return in.sortByKey(false);
+					}
 
-		// JavaPairDStream<Integer, Integer> contestants =
-		// validatedPhoneCalls.mapToPair(
-		// new PairFunction<PhoneCall, Integer, Integer>() {
-		// public Tuple2<Integer, Integer> call(PhoneCall x) {
-		// return new Tuple2<Integer, Integer>(x.contestantNumber, 1);
-		// }
-		// });
-		//
-		// JavaPairDStream<Integer, Integer> runningContestantCounts =
-		// contestants.updateStateByKey(updateFunction);
-		// runningContestantCounts.print();
+				});
 
-		// [Question] How to make aggregation from streaming begin till current
-		// batch,
-		// not just make aggregation based on current batch or window
-
-		// JavaDStream<String> phonenums = votes.filter(new Function<String,
-		// Boolean>() {
-		// public Boolean call(String s) {
-		//
-		// return s.contains("a");
-		// }
-		// });
-		//
-		//
-		//
-		// JavaPairDStream<String, Integer> phonenums = votes.mapToPair(
-		// new PairFunction<String, String, Integer>() {
-		// public Tuple2<String, Integer> call(String x) {
-		// String[] fields = x.split(" ");
-		// System.out.println("phone number : " + fields[1]);
-		// return new Tuple2<String, Integer>(fields[1], 1);
-		// }
-		// });
-		//
-		// JavaPairDStream<String, Integer> phoneNumCounts =
-		// phonenums.reduceByKey(
-		// new Function2<Integer, Integer, Integer>() {
-		// public Integer call(Integer i1, Integer i2) throws Exception {
-		//
-		// return i1 + i2;
-		// }
-		// });
-		//
-		// phoneNumCounts.cache();
-		//
-		// JavaPairDStream<String, Integer> newvotes = votes.mapToPair(
-		// new PairFunction<String, String, Integer>() {
-		// public Tuple2<String, Integer> call(String x) {
-		// String[] fields = x.split(" ");
-		//
-		//
-		// System.out.println("voteId : " + fields[0]);
-		// return new Tuple2<String, Integer>(fields[2], 1);
-		// }
-		// });
-		//
-		// JavaPairDStream<String, Integer> voteCounts = newvotes.reduceByKey(
-		// new Function2<Integer, Integer, Integer>() {
-		// public Integer call(Integer i1, Integer i2) throws Exception {
-		// if()
-		// return i1 + i2;
-		// }
-		// });
-		//
-		// voteCounts.print();
+		sortedTotalWindowContestantCounts.print();
+		
+		
 
 		jssc.start(); // Start the computation
 		jssc.awaitTermination(); // Wait for the computation to terminate
