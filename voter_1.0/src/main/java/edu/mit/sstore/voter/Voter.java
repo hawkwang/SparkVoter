@@ -142,12 +142,6 @@ public class Voter extends Receiver<String> {
 					}
 				});
 
-		JavaDStream<PhoneCall> temporyPhoneCalls = phoneCalls
-				.filter(new Function<PhoneCall, Boolean>() {
-					public Boolean call(PhoneCall call) {
-						return true;
-					}
-				});
 
 		// System.out.println("original votes number");
 		// phoneCalls.count().print();
@@ -177,7 +171,7 @@ public class Voter extends Receiver<String> {
 		final JavaPairDStream<Long, Integer> callNumberCounts = calls
 				.updateStateByKey(updateFunction);
 		
-		callNumberCounts.print();
+		//callNumberCounts.print();
 
 		// generate the validate phone numbers, which is still allowed to send vote
 		JavaPairDStream<Long, Integer> allowedCalls = callNumberCounts.filter(new Function<Tuple2<Long, Integer>,Boolean>(){
@@ -190,7 +184,7 @@ public class Voter extends Receiver<String> {
 			}
 		});
 		
-		allowedCalls.print();
+		//allowedCalls.print();
 		
 		// how to get the count for the specified phone number?
 		// Integer count = callNumberCounts.
@@ -232,8 +226,19 @@ public class Voter extends Receiver<String> {
 		// return null;
 		// }
 		// });
+		
 
-		JavaPairDStream<Long, PhoneCall> anotherTemporyPhoneCalls = temporyPhoneCalls
+		// get validate contestant phone calls
+		JavaDStream<PhoneCall> validContestantPhoneCalls = phoneCalls
+				.filter(new Function<PhoneCall, Boolean>() {
+					public Boolean call(PhoneCall call) {
+						if(call.contestantNumber>6)
+							return false;
+						return true;
+					}
+				});
+
+		JavaPairDStream<Long, PhoneCall> anotherTemporyPhoneCalls = validContestantPhoneCalls
 				.mapToPair(new PairFunction<PhoneCall, Long, PhoneCall>() {
 					public Tuple2<Long, PhoneCall> call(PhoneCall x) {
 						return new Tuple2<Long, PhoneCall>(x.phoneNumber, x);
@@ -286,10 +291,32 @@ public class Voter extends Receiver<String> {
 
 		//newStatusPairRDD.foreach(f1);
 
-		JavaPairDStream<Long, Tuple2<PhoneCall, Integer>> hello = anotherTemporyPhoneCalls
+		// get validate phone call records
+		JavaPairDStream<Long, Tuple2<PhoneCall, Integer>> validatePhoneCalls = anotherTemporyPhoneCalls
 				.join(allowedCalls);
 		
-		hello.print();
+		//validatePhoneCalls.print();
+		
+
+		JavaDStream<PhoneCall> validateCalls = validatePhoneCalls
+				.transform(new Function<JavaPairRDD<Long, Tuple2<PhoneCall, Integer>>, JavaRDD<PhoneCall>>() {
+					public JavaRDD<PhoneCall> call(
+							JavaPairRDD<Long, Tuple2<PhoneCall, Integer>> v1)
+							throws Exception {
+						JavaRDD<PhoneCall> item = v1
+								.map(new Function<Tuple2<Long, Tuple2<PhoneCall, Integer>>, PhoneCall>() {
+									public PhoneCall call(
+											Tuple2<Long, Tuple2<PhoneCall, Integer>> validItem)
+											throws Exception {
+										return validItem._2()._1();
+									}
+
+								});
+						return item;
+					}
+				});
+		
+		validateCalls.print();
 
 //		JavaPairDStream<Long, Tuple2<PhoneCall, Integer>> cleanedDStream = anotherTemporyPhoneCalls
 //				.transformToPair(new Function<JavaPairRDD<Long, PhoneCall>, JavaPairRDD<Long, Tuple2<PhoneCall, Integer>>>() {
