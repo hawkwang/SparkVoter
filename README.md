@@ -16,7 +16,7 @@ Prepare with Redis
 
 
 Usage with VoterGenerater
-^^^^^^^^^
+-----------
 
 
 1. ``cd VoterGenerater``
@@ -24,7 +24,7 @@ Usage with VoterGenerater
 
 
 Usage with voter_1.0
-^^^^^^^^^
+-----------
 
 
 Now the voter_1.0 is a Eclipse maven project.
