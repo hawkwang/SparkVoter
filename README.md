@@ -6,17 +6,20 @@ Using "Voter" to consume votes, validate and count votes for each contestant.
 
 In order to save the historical votes, we use redis to save each vote.
 
+
 Prepare with Redis
 ^^^^^^^
 
 1. install redis, see http://redis.io/topics/quickstart
 2. launch redis server with command ``./redis-server``
 
+
 Usage with VoterGenerater
 ^^^^^
 
 1. ``cd VoterGenerater``
 2. ``java TCPServer votes-o-40.txt 1000``, here 1000 is the sending interval
+
 
 Usage with voter_1.0
 ^^^^^
