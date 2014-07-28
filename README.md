@@ -8,7 +8,7 @@ In order to save the historical votes, we use redis to save each vote.
 
 
 Prepare with Redis
-^^^^^^^
+-----------
 
 
 1. install redis, see http://redis.io/topics/quickstart
@@ -16,7 +16,7 @@ Prepare with Redis
 
 
 Usage with VoterGenerater
-^^^^^
+^^^^^^^^^
 
 
 1. ``cd VoterGenerater``
@@ -24,7 +24,7 @@ Usage with VoterGenerater
 
 
 Usage with voter_1.0
-^^^^^
+^^^^^^^^^
 
 
 Now the voter_1.0 is a Eclipse maven project.
