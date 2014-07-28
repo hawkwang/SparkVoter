@@ -23,6 +23,9 @@ import org.apache.log4j.Level;
 
 import com.google.common.base.Optional;
 
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.JedisPoolConfig;
 import scala.Option;
 import scala.Tuple2;
 
@@ -134,6 +137,10 @@ public class Voter extends Receiver<String> {
 					}
 				});
 
+//		JavaDStream<Long> counts = votes.count();
+//		counts.print();
+	
+		
 		// create updateFunction which is used to update the total call count for each phone number 
 		Function2<List<Integer>, Optional<Integer>, Optional<Integer>> updateFunction = new Function2<List<Integer>, Optional<Integer>, Optional<Integer>>() {
 			public Optional<Integer> call(List<Integer> values,
@@ -160,8 +167,13 @@ public class Voter extends Receiver<String> {
 		// generate the accumulated count for phone numbers
 		final JavaPairDStream<Long, Integer> callNumberCounts = calls
 				.updateStateByKey(updateFunction);
-		
 		//callNumberCounts.print();
+		
+		JavaPairDStream<Long, PhoneCall> pairVotes = phoneCalls.mapToPair(new PairFunction<PhoneCall, Long, PhoneCall>(){
+			public Tuple2<Long, PhoneCall> call(PhoneCall call) throws Exception {
+				return new Tuple2<Long, PhoneCall>(call.voteId, call);
+			}
+		});
 
 		// generate the validate phone numbers, which is still allowed to send vote
 		JavaPairDStream<Long, Integer> allowedCalls = callNumberCounts.filter(new Function<Tuple2<Long, Integer>,Boolean>(){
@@ -221,8 +233,43 @@ public class Voter extends Receiver<String> {
 		
 		//validateCalls.print();
 		
+		//save all votes with redis
+		validateCalls.foreachRDD(new Function<JavaRDD<PhoneCall>,Void>()
+				{
+
+					public Void call(JavaRDD<PhoneCall> rdd) throws Exception {
+						
+						rdd.foreach(new VoidFunction<PhoneCall>(){
+
+							public void call(PhoneCall call) throws Exception {
+								System.out.println(call.toString());
+								String key = String.valueOf(call.voteId);
+								String value = call.getContent();
+								
+								// save <key,value> using redis
+								JedisPool pool = new JedisPool(new JedisPoolConfig(), "localhost");
+								Jedis jedis = pool.getResource();
+								try {
+								  jedis.set(key, value);
+								} finally {
+								  if (null != jedis) {
+								    jedis.close();
+								  }
+								}
+								/// ... when closing your application:
+								pool.destroy();
+							}
+						}
+						);
+						
+						return null;
+					}
+			
+				}
+				);	
+		
+		
 		// use window to get generate leaderboard
-		//step 1, generate window
 		Integer size = Integer.valueOf(args[1]);
 		Integer slide = Integer.valueOf(args[2]);
 		

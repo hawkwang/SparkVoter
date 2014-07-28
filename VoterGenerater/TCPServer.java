@@ -16,11 +16,13 @@ class TCPServer
 
          ServerSocket welcomeSocket = new ServerSocket(6789);
 
+         System.out.println("Ready to get connection and send votes ... ");
+
          while(true)
          {
             Socket connectionSocket = welcomeSocket.accept();
             DataOutputStream outToClient = new DataOutputStream(connectionSocket.getOutputStream());
-            svr.sendOneVateEachDuration(outToClient);
+            svr.sendOneVoteEachDuration(outToClient);
             //svr.rateControlledRunLoop(outToClient);
 
             //String voteinfo;
@@ -54,7 +56,7 @@ class TCPServer
            InputStream fis=new FileInputStream(inputfile);
            BufferedReader br = new BufferedReader( new InputStreamReader(fis) );
            while ((line = br.readLine()) != null) {
-              System.out.println(line);
+              //System.out.println(line);
               m_votes.add(line);
            }         
         }catch(Exception e){
@@ -65,7 +67,7 @@ class TCPServer
     }
 
 
-    public void sendOneVateEachDuration(DataOutputStream outToClient) throws Exception
+    public void sendOneVoteEachDuration(DataOutputStream outToClient) throws Exception
     {
         int duration = this.sendrate;
         this.reset();
@@ -74,7 +76,9 @@ class TCPServer
         {
             if(this.hasMoreVotes()==true)
             {
-                String tuple = this.nextVoteString() + "\n";
+                String vote = this.nextVoteString();
+                System.out.println("Sending - " + vote);
+                String tuple = vote + "\n";
                 outToClient.writeBytes(tuple);
                 Thread.sleep(duration);
             }
