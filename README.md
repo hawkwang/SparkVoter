@@ -10,6 +10,7 @@ In order to save the historical votes, we use redis to save each vote.
 Prepare with Redis
 ^^^^^^^
 
+
 1. install redis, see http://redis.io/topics/quickstart
 2. launch redis server with command ``./redis-server``
 
@@ -17,12 +18,14 @@ Prepare with Redis
 Usage with VoterGenerater
 ^^^^^
 
+
 1. ``cd VoterGenerater``
 2. ``java TCPServer votes-o-40.txt 1000``, here 1000 is the sending interval
 
 
 Usage with voter_1.0
 ^^^^^
+
 
 Now the voter_1.0 is a Eclipse maven project.
 We can run it under Eclipse, or we should export to a runnable jar file.
