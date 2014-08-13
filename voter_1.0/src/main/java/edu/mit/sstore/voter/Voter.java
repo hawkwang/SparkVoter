@@ -86,7 +86,8 @@ public class Voter extends Receiver<String> {
 			restart("Trying to connect again");
 		} catch (ConnectException ce) {
 			// restart if could not connect to server
-			restart("Could not connect", ce);
+			//restart("Could not connect", ce);
+			stop("Could not connect", ce);
 		} catch (Throwable t) {
 			restart("Error receiving data", t);
 		}
@@ -137,8 +138,8 @@ public class Voter extends Receiver<String> {
 					}
 				});
 
-//		JavaDStream<Long> counts = votes.count();
-//		counts.print();
+		JavaDStream<Long> counts = votes.count();
+		counts.print();
 	
 		
 		// create updateFunction which is used to update the total call count for each phone number 
@@ -242,7 +243,7 @@ public class Voter extends Receiver<String> {
 						rdd.foreach(new VoidFunction<PhoneCall>(){
 
 							public void call(PhoneCall call) throws Exception {
-								System.out.println(call.toString());
+								//System.out.println(call.toString());
 								String key = String.valueOf(call.voteId);
 								String value = call.getContent();
 								
@@ -267,6 +268,14 @@ public class Voter extends Receiver<String> {
 			
 				}
 				);	
+		
+		// validate calls
+		JavaPairDStream<Integer, Integer> contestantVotes = validateCalls
+				.mapToPair(new PairFunction<PhoneCall, Integer, Integer>() {
+					public Tuple2<Integer, Integer> call(PhoneCall x) {
+						return new Tuple2<Integer, Integer>(x.contestantNumber, 1);
+					}
+				});		
 		
 		
 		// use window to get generate leaderboard
@@ -294,11 +303,11 @@ public class Voter extends Receiver<String> {
 					}
 				});
 		
-		contestantCounts.print();
+		//contestantCounts.print();
 		
 		// generate the accumulated count for contestants
-		JavaPairDStream<Integer, Integer> totalWindowContestantCounts = contestantNums.updateStateByKey(updateFunction);
-		//totalWindowContestantCounts.print();
+		JavaPairDStream<Integer, Integer> totalWindowContestantCounts = contestantVotes.updateStateByKey(updateFunction);
+		totalWindowContestantCounts.print();
 
 		
 		
@@ -324,9 +333,7 @@ public class Voter extends Receiver<String> {
 				});
 
 		sortedTotalWindowContestantCounts.print();
-		
-		
-
+	
 		jssc.start(); // Start the computation
 		jssc.awaitTermination(); // Wait for the computation to terminate
 

@@ -4,7 +4,30 @@
   <artifactId>voter_1.0</artifactId>
   <version>0.0.1-SNAPSHOT</version>
   <name>Voter</name>
+  <repositories>
+   	<repository>
+      <id>Akka repository</id>
+      <url>http://repo.akka.io/releases</url>
+    </repository>
+  	<repository>
+      <id>cloudera</id>
+      <name>Cloudera Maven Repository</name>
+      <url>https://repository.cloudera.com/content/repositories/releases/</url>
+    </repository>
+  </repositories>  
+  <properties>
+    <maven.compiler.source>1.7</maven.compiler.source>
+    <maven.compiler.target>1.7</maven.compiler.target>
+    <encoding>UTF-8</encoding>
+    <scala.tools.version>2.10</scala.tools.version>
+    <scala.version>2.10.0</scala.version>
+  </properties>  
   <dependencies>
+    <dependency>
+      <groupId>org.scala-lang</groupId>
+      <artifactId>scala-library</artifactId>
+      <version>${scala.version}</version>
+    </dependency>
     <dependency> <!-- Spark dependency -->
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-core_2.10</artifactId>
@@ -23,4 +46,52 @@
     	<scope>compile</scope>
 	</dependency>    
   </dependencies>
+   <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>2.3</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+        <configuration>
+          <!-- put your configurations here -->
+		  <filters>
+            <filter>
+              <artifact>*:*</artifact>
+              <excludes>
+                <exclude>META-INF/*.SF</exclude>
+                <exclude>META-INF/*.DSA</exclude>
+                <exclude>META-INF/*.RSA</exclude>
+              </excludes>
+            </filter>
+          </filters>          
+          <transformers>
+            <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                <mainClass>edu.mit.sstore.voter.Voter</mainClass>
+            </transformer>
+          	<transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+  				<resource>reference.conf</resource>                 
+			</transformer>
+          </transformers>          
+        </configuration>            
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-eclipse-plugin</artifactId>
+        <version>2.9</version>
+        <configuration>
+          <sourceIncludes>
+            <sourceInclude>**/*.java</sourceInclude>
+          </sourceIncludes>
+        </configuration>
+      </plugin>      
+    </plugins>
+  </build> 
 </project>
