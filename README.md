@@ -20,7 +20,7 @@ Usage with VoterGenerater
 
 
 1. ``cd VoterGenerater``
-2. ``java TCPServer votes-o-40.txt 1000``, here 1000 is the sending interval
+2. ``java TCPServer votes-o-40.txt 1000 0``, here 1000 is the sending interval, 0 is flag (if flag is 1, 1000 means inputrate is 1000 tuple per second)
 
 
 Usage with voter_1.0
