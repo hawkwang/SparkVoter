@@ -7,12 +7,12 @@ class TCPServer
 
    public static void main(String argv[]) throws Exception
    {
-        if (argv.length < 2) {
+        if (argv.length < 3) {
           System.err.println("Usage: TCPServer <inputfile> <inputrate> ");
           System.exit(1);
         }
 
-         TCPServer svr = new TCPServer(argv[0], Integer.parseInt(argv[1]));
+         TCPServer svr = new TCPServer(argv[0], Integer.parseInt(argv[1]), Integer.parseInt(argv[2]));
 
          ServerSocket welcomeSocket = new ServerSocket(6789);
 
@@ -22,7 +22,8 @@ class TCPServer
          {
             Socket connectionSocket = welcomeSocket.accept();
             DataOutputStream outToClient = new DataOutputStream(connectionSocket.getOutputStream());
-            svr.sendOneVoteEachDuration(outToClient);
+            svr.send(outToClient);
+            //svr.sendOneVoteEachDuration(outToClient);
             //svr.rateControlledRunLoop(outToClient);
 
             //String voteinfo;
@@ -40,14 +41,16 @@ class TCPServer
     private ArrayList<String> m_votes;
     
     private int m_position = 0;
+    private int m_flag = 0;
     private int sendrate = 1000;
     private boolean stop = false;
 
 
     // methods
-    public TCPServer(String inputfile, int sendrate)
+    public TCPServer(String inputfile, int sendrate, int flag)
     {
 	m_position = 0;
+        m_flag = flag;
 
         String  line = null;
         m_votes = new ArrayList<String>();
@@ -64,6 +67,14 @@ class TCPServer
         }        
 
         this.sendrate = sendrate;
+    }
+
+    public void send(DataOutputStream outToClient) throws Exception
+    {
+        if(m_flag==0)
+            sendOneVoteEachDuration(outToClient);
+        else
+            rateControlledRunLoop(outToClient);
     }
 
 

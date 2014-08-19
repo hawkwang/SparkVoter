@@ -29,7 +29,7 @@ import redis.clients.jedis.JedisPoolConfig;
 import scala.Option;
 import scala.Tuple2;
 
-public class Voter extends Receiver<String> {
+public class AnotherVoter extends Receiver<String> {
 
 	// ============= Receiver code that receives data over a socket
 	// ==============
@@ -40,7 +40,7 @@ public class Voter extends Receiver<String> {
 	public static final int MAX_VOTES = 1;//1000; 
 	public static final int NUM_CONTESTANTS = 6; 
 
-	public Voter(String host_, int port_) {
+	public AnotherVoter(String host_, int port_) {
 		super(StorageLevel.MEMORY_AND_DISK_2());
 		host = host_;
 		port = port_;
@@ -127,7 +127,7 @@ public class Voter extends Receiver<String> {
 
 		jssc.checkpoint(".");
 
-		JavaReceiverInputDStream<String> votes = jssc.receiverStream(new Voter(
+		JavaReceiverInputDStream<String> votes = jssc.receiverStream(new AnotherVoter(
 				"localhost", 6789));
 
 		// transform text line stream to PhoneCall stream
@@ -140,7 +140,66 @@ public class Voter extends Receiver<String> {
 
 		JavaDStream<Long> counts = votes.count();
 		counts.print();
-	
+		
+		// filtering based on phone number 
+		JavaDStream<PhoneCall> validateNumberPhoneCalls = phoneCalls
+				.filter(new Function<PhoneCall, Boolean>() {
+					public Boolean call(PhoneCall call) {
+						
+						String key = String.valueOf(call.phoneNumber);
+						
+						JedisPool pool = new JedisPool(new JedisPoolConfig(), "localhost");
+						Jedis jedis = pool.getResource();
+						boolean flag = true;
+						try {
+						  jedis.select(0); // use db - 0
+						  String value = jedis.get(key);
+						  if(value==null)
+						  {
+							  flag = true;
+							  jedis.set(key, "1");
+						  }
+						  else
+						  {
+							  Integer count = Integer.valueOf(value);
+							  if (count >= AnotherVoter.MAX_VOTES )
+								  flag = false;
+							  else
+							  {
+								  count++;
+								  value = String.valueOf(count);
+								  jedis.set(key, value);
+								  flag = true;
+							  }
+						  }
+							  
+						  
+						} finally {
+						  if (null != jedis) {
+						    jedis.close();
+						  }
+						}
+						/// ... when closing your application:
+						pool.destroy();
+
+						return flag;
+
+					}
+				});
+		
+		
+		// filtering based on contestant number
+		JavaDStream<PhoneCall> validateCalls = validateNumberPhoneCalls
+				.filter(new Function<PhoneCall, Boolean>() {
+					public Boolean call(PhoneCall call) {
+						if (call.contestantNumber > AnotherVoter.NUM_CONTESTANTS)
+							return false;
+						else {
+
+							return true;
+						}
+					}
+				});	
 		
 		// create updateFunction which is used to update the total call count for each phone number 
 		Function2<List<Integer>, Optional<Integer>, Optional<Integer>> updateFunction = new Function2<List<Integer>, Optional<Integer>, Optional<Integer>>() {
@@ -158,83 +217,9 @@ public class Voter extends Receiver<String> {
 		};
 
 		// 
-		JavaPairDStream<Long, Integer> calls = phoneCalls
-				.mapToPair(new PairFunction<PhoneCall, Long, Integer>() {
-					public Tuple2<Long, Integer> call(PhoneCall x) {
-						return new Tuple2<Long, Integer>(x.phoneNumber, 1);
-					}
-				});
-
-		// generate the accumulated count for phone numbers
-		final JavaPairDStream<Long, Integer> callNumberCounts = calls
-				.updateStateByKey(updateFunction);
-		//callNumberCounts.print();
-		
-		JavaPairDStream<Long, PhoneCall> pairVotes = phoneCalls.mapToPair(new PairFunction<PhoneCall, Long, PhoneCall>(){
-			public Tuple2<Long, PhoneCall> call(PhoneCall call) throws Exception {
-				return new Tuple2<Long, PhoneCall>(call.voteId, call);
-			}
-		});
-
-		// generate the validate phone numbers, which is still allowed to send vote
-		JavaPairDStream<Long, Integer> allowedCalls = callNumberCounts.filter(new Function<Tuple2<Long, Integer>,Boolean>(){
-
-			public Boolean call(Tuple2<Long, Integer> v1) throws Exception {
-				if (v1._2() > Voter.MAX_VOTES)
-					return false;
-				
-				return true;
-			}
-		});
-		
-		//allowedCalls.print();
-		
-		// get validate contestant phone calls
-		JavaDStream<PhoneCall> validContestantPhoneCalls = phoneCalls
-				.filter(new Function<PhoneCall, Boolean>() {
-					public Boolean call(PhoneCall call) {
-						if ( call.contestantNumber > Voter.NUM_CONTESTANTS )
-							return false;
-						return true;
-					}
-				});
-
-		JavaPairDStream<Long, PhoneCall> anotherTemporyPhoneCalls = validContestantPhoneCalls
-				.mapToPair(new PairFunction<PhoneCall, Long, PhoneCall>() {
-					public Tuple2<Long, PhoneCall> call(PhoneCall x) {
-						return new Tuple2<Long, PhoneCall>(x.phoneNumber, x);
-					}
-				});
-
-
-		// get validate phone call records
-		JavaPairDStream<Long, Tuple2<PhoneCall, Integer>> validatePhoneCalls = anotherTemporyPhoneCalls
-				.join(allowedCalls);
-		
-		//validatePhoneCalls.print();
-		
-
-		JavaDStream<PhoneCall> validateCalls = validatePhoneCalls
-				.transform(new Function<JavaPairRDD<Long, Tuple2<PhoneCall, Integer>>, JavaRDD<PhoneCall>>() {
-					public JavaRDD<PhoneCall> call(
-							JavaPairRDD<Long, Tuple2<PhoneCall, Integer>> v1)
-							throws Exception {
-						JavaRDD<PhoneCall> item = v1
-								.map(new Function<Tuple2<Long, Tuple2<PhoneCall, Integer>>, PhoneCall>() {
-									public PhoneCall call(
-											Tuple2<Long, Tuple2<PhoneCall, Integer>> validItem)
-											throws Exception {
-										return validItem._2()._1();
-									}
-
-								});
-						return item;
-					}
-				});
-		
 		//validateCalls.print();
 		
-		//save all votes with redis
+		//save all validate votes with redis
 		validateCalls.foreachRDD(new Function<JavaRDD<PhoneCall>,Void>()
 				{
 
@@ -250,6 +235,7 @@ public class Voter extends Receiver<String> {
 								// save <key,value> using redis
 								JedisPool pool = new JedisPool(new JedisPoolConfig(), "localhost");
 								Jedis jedis = pool.getResource();
+								jedis.select(1); // use db - 1
 								try {
 								  jedis.set(key, value);
 								} finally {
