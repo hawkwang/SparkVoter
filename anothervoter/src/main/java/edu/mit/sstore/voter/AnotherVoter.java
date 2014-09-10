@@ -11,6 +11,10 @@ import java.net.Socket;
 import java.util.Arrays;
 import java.util.List;
 
+import net.rubyeye.xmemcached.XMemcachedClient;
+import net.rubyeye.xmemcached.XMemcachedClientBuilder;
+import net.rubyeye.xmemcached.utils.AddrUtil;
+
 import org.apache.spark.api.java.*;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.function.*;
@@ -122,8 +126,9 @@ public class AnotherVoter extends Receiver<String> {
 	    Logger.getLogger("org").setLevel(Level.ERROR);
 	    Logger.getLogger("akka").setLevel(Level.ERROR);
 	    
+	    final Long batch_duration = Long.valueOf(args[0]);
 		JavaStreamingContext jssc = new JavaStreamingContext(conf,
-				new Duration(Integer.valueOf(args[0])));
+				new Duration( batch_duration ) );
 
 		jssc.checkpoint(".");
 
@@ -138,8 +143,9 @@ public class AnotherVoter extends Receiver<String> {
 					}
 				});
 
-		JavaDStream<Long> counts = votes.count();
-		counts.print();
+//		JavaDStream<Long> counts = votes.count();
+//		counts.print();
+
 		
 		// filtering based on phone number 
 		JavaDStream<PhoneCall> validateNumberPhoneCalls = phoneCalls
@@ -312,6 +318,30 @@ public class AnotherVoter extends Receiver<String> {
 				});
 
 		sortedTotalContestantCounts.print();
+		
+		// make some statistics
+		phoneCalls.foreachRDD(new Function<JavaRDD<PhoneCall>, Void>() {
+
+			public Void call(JavaRDD<PhoneCall> rdd) throws Exception {
+				Long count = rdd.count();
+				System.out.println( "count : " + count );
+				Double throughput = (count.doubleValue()*1000 / batch_duration.doubleValue());
+				System.out.println("Current rate = " + throughput
+						+ " records / second");
+				
+				XMemcachedClientBuilder builder = new XMemcachedClientBuilder(AddrUtil.getAddresses("localhost:11211"));
+			    XMemcachedClient client= (XMemcachedClient) builder.build();
+			    client.setPrimitiveAsString(true);
+			    
+			    Long currentTimeStamp = System.currentTimeMillis();
+			    client.add(currentTimeStamp.toString(), 0, throughput);
+			     
+
+				return null;
+			}
+
+		});	
+
 	
 		jssc.start(); // Start the computation
 		jssc.awaitTermination(); // Wait for the computation to terminate
