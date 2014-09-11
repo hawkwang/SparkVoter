@@ -135,6 +135,28 @@ public class AnotherVoter extends Receiver<String> {
 		JavaReceiverInputDStream<String> votes = jssc.receiverStream(new AnotherVoter(
 				"localhost", 6789));
 
+		// get start timestamp
+//		votes.foreachRDD(new Function<JavaRDD<String>, Void>() {
+//
+//			public Void call(JavaRDD<String> rdd) throws Exception {
+//				Long count = rdd.count();
+//				System.out.println( "count : " + count );
+//				
+////				XMemcachedClientBuilder builder = new XMemcachedClientBuilder(AddrUtil.getAddresses("localhost:11211"));
+////			    XMemcachedClient client= (XMemcachedClient) builder.build();
+////			    client.setPrimitiveAsString(true);
+//			    
+//			    Long currentTimeStamp = System.currentTimeMillis();
+//			    System.out.println("Start time: " + currentTimeStamp);
+//			    
+////			    client.add(currentTimeStamp.toString(), 0, throughput);
+//			     
+//
+//				return null;
+//			}
+//
+//		});	
+		
 		// transform text line stream to PhoneCall stream
 		JavaDStream<PhoneCall> phoneCalls = votes
 				.map(new Function<String, PhoneCall>() {
@@ -143,8 +165,8 @@ public class AnotherVoter extends Receiver<String> {
 					}
 				});
 
-//		JavaDStream<Long> counts = votes.count();
-//		counts.print();
+		JavaDStream<Long> counts = votes.count();
+		counts.print();
 
 		
 		// filtering based on phone number 
@@ -324,7 +346,7 @@ public class AnotherVoter extends Receiver<String> {
 
 			public Void call(JavaRDD<PhoneCall> rdd) throws Exception {
 				Long count = rdd.count();
-				System.out.println( "count : " + count );
+				//System.out.println( "count : " + count );
 				Double throughput = (count.doubleValue()*1000 / batch_duration.doubleValue());
 				System.out.println("Current rate = " + throughput
 						+ " records / second");
@@ -334,6 +356,7 @@ public class AnotherVoter extends Receiver<String> {
 			    client.setPrimitiveAsString(true);
 			    
 			    Long currentTimeStamp = System.currentTimeMillis();
+			    //System.out.println("End time: " + currentTimeStamp);
 			    client.add(currentTimeStamp.toString(), 0, throughput);
 			     
 

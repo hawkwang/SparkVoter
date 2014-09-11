@@ -92,7 +92,7 @@ public class Calculator implements Runnable {
 		// make statistic here
 		
 		System.out.println("Make statistics ... ");
-		//System.out.println("Sorted map: " + entryList);
+		System.out.println("Sorted map: " + entryList);
 		
 		int count = 0;
 		Double total = 0.0;
