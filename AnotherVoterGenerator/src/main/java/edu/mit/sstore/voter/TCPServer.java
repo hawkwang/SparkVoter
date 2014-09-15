@@ -91,13 +91,15 @@ class TCPServer
     public void sendOneVoteEachDuration(DataOutputStream outToClient) throws Exception
     {
         int duration = this.sendrate;
-        this.reset();
+        //this.reset();
 
         while(true)
         {
             if(this.hasMoreVotes()==true)
             {
                 String vote = this.nextVoteString();
+                long current = System.currentTimeMillis();
+                System.out.println("Sending - " + vote + " @ " + current );
                 //System.out.println("Sending - " + vote);
                 String tuple = vote + "\n";
                 outToClient.writeBytes(tuple);
