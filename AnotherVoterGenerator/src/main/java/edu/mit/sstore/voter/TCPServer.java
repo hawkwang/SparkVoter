@@ -152,8 +152,11 @@ class TCPServer
                         {
                             tuple = this.nextVoteString() + "\n";
                             //tuple = "" + i +" " + i +" " + i + " " + i + '\n';
+                            long current = System.currentTimeMillis();
                             outToClient.writeBytes(tuple); 
                             counter++;
+                            if(counter % 1000 == 0)
+                            	System.out.println("Sending - " + counter + " @ " + current );
                         }
                         else
                             beStop = true;
